@@ -1,0 +1,16 @@
+target/
+!.mvn/wrapper/maven-wrapper.properties
+classworld.properties
+.mvn/
+
+# IntelliJ IDEA
+.idea/
+*.iws
+*.iml
+*.ipr
+out/
+
+# Логи и временные файлы
+*.log
+logs/
+.DS_Store

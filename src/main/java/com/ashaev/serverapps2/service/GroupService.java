@@ -1,0 +1,64 @@
+package com.ashaev.serverapps2.service;
+
+import com.ashaev.serverapps2.dto.Group.GroupRequest;
+import com.ashaev.serverapps2.dto.Group.GroupResponse;
+import com.ashaev.serverapps2.entity.Group;
+import com.ashaev.serverapps2.repository.GroupRepository;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.util.List;
+import java.util.stream.Collectors;
+
+@Service
+@RequiredArgsConstructor
+@Transactional(readOnly = true)
+public class GroupService {
+
+    private final GroupRepository groupRepository;
+
+    public List<GroupResponse> getAllGroups() {
+        return groupRepository.findAll().stream()
+                .map(group -> new GroupResponse(group.getId(), group.getName()))
+                .collect(Collectors.toList());
+    }
+
+    public GroupResponse getGroupById(Long id) {
+        Group group = groupRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Группа с ID " + id + " не найдена"));
+        return new GroupResponse(group.getId(), group.getName());
+    }
+
+    @Transactional
+    public GroupResponse createGroup(GroupRequest request) {
+        if (groupRepository.existsByName(request.getName())) {
+            throw new RuntimeException("Группа с названием '" + request.getName() + "' уже существует");
+        }
+        Group group = new Group();
+        group.setName(request.getName());
+        Group savedGroup = groupRepository.save(group);
+        return new GroupResponse(savedGroup.getId(), savedGroup.getName());
+    }
+
+    @Transactional
+    public GroupResponse updateGroup(Long id, GroupRequest request) {
+        Group group = groupRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Группа с ID " + id + " не найдена"));
+
+        if (!group.getName().equals(request.getName()) && groupRepository.existsByName(request.getName())) {
+            throw new RuntimeException("Группа с названием '" + request.getName() + "' уже существует");
+        }
+
+        group.setName(request.getName());
+        return new GroupResponse(group.getId(), group.getName());
+    }
+
+    @Transactional
+    public void deleteGroup(Long id) {
+        if (!groupRepository.existsById(id)) {
+            throw new RuntimeException("Группа с ID " + id + " не найдена");
+        }
+        groupRepository.deleteById(id);
+    }
+}

@@ -32,10 +32,10 @@ public class Lesson {
     private Teacher teacher;
 
     @Column(name = "class_date", nullable = false)
-    private LocalDate classDate; // Дата занятия
+    private LocalDate classDate;
 
     @Column(name = "class_number", nullable = false)
-    private Integer classNumber; // Номер пары по порядку
+    private Integer classNumber; //* Номер пары по порядку
 
     @OneToMany(mappedBy = "lesson", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<Attendance> attendances = new ArrayList<>();

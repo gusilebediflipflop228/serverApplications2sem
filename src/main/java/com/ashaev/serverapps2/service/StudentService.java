@@ -4,10 +4,14 @@ import com.ashaev.serverapps2.dto.Group.GroupResponse;
 import com.ashaev.serverapps2.dto.Student.StudentRequest;
 import com.ashaev.serverapps2.dto.Student.StudentResponse;
 import com.ashaev.serverapps2.entity.Group;
+import com.ashaev.serverapps2.entity.Role;
 import com.ashaev.serverapps2.entity.Student;
+import com.ashaev.serverapps2.entity.User;
 import com.ashaev.serverapps2.repository.GroupRepository;
 import com.ashaev.serverapps2.repository.StudentRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.access.AccessDeniedException; // Импорт обязателен
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -31,10 +35,38 @@ public class StudentService {
                 .collect(Collectors.toList());
     }
 
+    public List<StudentResponse> getStudentsByGroupIdWithCheck(Long groupId) {
+        User currentUser = (User) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+        if (currentUser.getRole() == Role.STUDENT) {
+            Student student = studentRepository.findByUser(currentUser)
+                    .orElseThrow(() -> new AccessDeniedException("Вы не числитесь в системе как студент"));
+
+            if (!student.getGroup().getId().equals(groupId)) {
+                throw new AccessDeniedException("Доступ запрещен. Вы можете просматривать только студентов своей группы.");
+            }
+        }
+
+        return getStudentsByGroupId(groupId);
+    }
+
     public StudentResponse getStudentById(Long id) {
         Student student = studentRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Студент с ID " + id + " не найден"));
         return mapToResponse(student);
+    }
+
+    public StudentResponse getStudentByIdWithCheck(Long id) {
+        User currentUser = (User) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+        if (currentUser.getRole() == Role.STUDENT) {
+            Student student = studentRepository.findByUser(currentUser)
+                    .orElseThrow(() -> new AccessDeniedException("Вы не числитесь в системе как student"));
+
+            if (!student.getId().equals(id)) {
+                throw new AccessDeniedException("Доступ запрещен. Студент может просматривать только свою личную информацию.");
+            }
+        }
+
+        return getStudentById(id);
     }
 
     @Transactional

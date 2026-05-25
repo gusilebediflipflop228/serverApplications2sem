@@ -12,6 +12,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
@@ -26,19 +27,22 @@ public class LessonController {
     private final LessonService lessonService;
 
     @PostMapping
-    @Operation(summary = "Создать новое занятие", description = "Преподаватель создает пару. Система автоматически находит всех студентов указанной группы и генерирует для них пустую ведомость (по умолчанию все отсутствуют).")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER')")
+    @Operation(summary = "Создать новое занятие", description = "Преподаватель или Админ создает пару. Система автоматически находит всех студентов указанной группы и генерирует для них пустую ведомость.")
     public ResponseEntity<ApiResponse<LessonResponse>> createLesson(@Valid @RequestBody LessonRequest request) {
         return ResponseEntity.ok(ApiResponse.success(lessonService.createLesson(request)));
     }
 
     @GetMapping("/{id}")
-    @Operation(summary = "Получить информацию о занятии и ведомость", description = "Возвращает данные занятия (предмет, препод, группа) вместе со списком студентов и их статусом присутствия.")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER', 'STUDENT')")
+    @Operation(summary = "Получить информацию о занятии и ведомость", description = "Возвращает данные занятия вместе со списком студентов и их статусом присутствия. Студенты видят только занятия своей группы.")
     public ResponseEntity<ApiResponse<LessonResponse>> getLessonById(
             @PathVariable @Parameter(description = "ID занятия", example = "1") Long id) {
-        return ResponseEntity.ok(ApiResponse.success(lessonService.getLessonById(id)));
+        return ResponseEntity.ok(ApiResponse.success(lessonService.getLessonByIdWithCheck(id)));
     }
 
     @PutMapping("/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER')")
     @Operation(summary = "Редактировать параметры занятия", description = "Позволяет изменить дату, номер пары, предмет, группу или преподавателя для существующего занятия.")
     public ResponseEntity<ApiResponse<LessonResponse>> updateLesson(
             @PathVariable @Parameter(description = "ID занятия", example = "1") Long id,
@@ -47,7 +51,8 @@ public class LessonController {
     }
 
     @DeleteMapping("/{id}")
-    @Operation(summary = "Удалить занятие из расписания", description = "Полностью удаляет занятие. Благодаря каскадному удалению, вся связанная ведомость посещаемости студентов сотрется автоматически.")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER')")
+    @Operation(summary = "Удалить занятие из расписания", description = "Полностью удаляет занятие и связанную ведомость.")
     public ResponseEntity<ApiResponse<String>> deleteLesson(
             @PathVariable @Parameter(description = "ID занятия", example = "1") Long id) {
         lessonService.deleteLesson(id);
@@ -55,6 +60,7 @@ public class LessonController {
     }
 
     @PutMapping("/{id}/attendance")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER')")
     @Operation(summary = "Отметить посещаемость на занятии", description = "Принимает список студентов с их статусами (пришел/не пришел) и массово обновляет ведомость для этого занятия.")
     public ResponseEntity<ApiResponse<String>> updateAttendance(
             @PathVariable @Parameter(description = "ID занятия", example = "1") Long id,
@@ -64,7 +70,8 @@ public class LessonController {
     }
 
     @GetMapping
-    @Operation(summary = "Получить расписание с фильтрами и пагинацией", description = "Позволяет выгрузить список пар за определенный период времени. Можно отфильтровать по конкретной группе или преподавателю с постраничным выводом. Ведомости студентов в этом списке не отображаются.")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER', 'STUDENT')")
+    @Operation(summary = "Получить расписание с фильтрами и пагинацией", description = "Позволяет выгрузить список пар за определенный период времени. Студенты всегда получают расписание только своей группы.")
     public ResponseEntity<ApiResponse<List<LessonResponse>>> getLessons(
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) @Parameter(description = "Начало периода (ГГГГ-ММ-ДД)", example = "2026-05-01") LocalDate startDate,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) @Parameter(description = "Конец периода (ГГГГ-ММ-ДД)", example = "2026-05-31") LocalDate endDate,
@@ -73,9 +80,8 @@ public class LessonController {
             @RequestParam(defaultValue = "0") @Parameter(description = "Номер страницы (начиная с 0)", example = "0") int page,
             @RequestParam(defaultValue = "10") @Parameter(description = "Количество записей на странице", example = "10") int size) {
 
-        // ИСПРАВЛЕНО: Теперь вызывается getLessonsPaged, как и написано в твоем сервисе
         return ResponseEntity.ok(ApiResponse.success(
-                lessonService.getLessonsPaged(startDate, endDate, groupId, teacherId, page, size)
+                lessonService.getLessonsPagedWithCheck(startDate, endDate, groupId, teacherId, page, size)
         ));
     }
 }

@@ -18,5 +18,5 @@ public class LessonResponse {
     private String teacherFullName;
     private LocalDate classDate;
     private Integer classNumber;
-    private List<AttendanceItemResponse> attendances; // Будет заполнено только при GET по ID
+    private List<AttendanceItemResponse> attendances;
 }

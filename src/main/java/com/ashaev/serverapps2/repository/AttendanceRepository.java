@@ -8,7 +8,5 @@ import java.util.Optional;
 
 @Repository
 public interface AttendanceRepository extends JpaRepository<Attendance, Long> {
-
-    // Поиск конкретной отметки студента на конкретном занятии
     Optional<Attendance> findByLessonIdAndStudentId(Long lessonId, Long studentId);
 }

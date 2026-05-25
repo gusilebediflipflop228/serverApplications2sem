@@ -1,16 +1,23 @@
+# Сборка
 target/
-!.mvn/wrapper/maven-wrapper.properties
-classworld.properties
-.mvn/
+build/
+*.class
 
-# IntelliJ IDEA
+# IDE
 .idea/
 *.iws
 *.iml
 *.ipr
 out/
 
-# Логи и временные файлы
+# Логи
 *.log
 logs/
+
+# Системное
 .DS_Store
+
+# Конфиги с паролями и ключами
+application-*.properties
+application-*.yml
+.env

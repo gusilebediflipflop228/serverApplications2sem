@@ -4,7 +4,6 @@ import com.ashaev.serverapps2.dto.Teacher.TeacherRequest;
 import com.ashaev.serverapps2.dto.Teacher.TeacherResponse;
 import com.ashaev.serverapps2.entity.Teacher;
 import com.ashaev.serverapps2.repository.TeacherRepository;
-// import com.ashaev.serverapps2.repository.UserRepository; // Раскомментируй, если есть
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -20,7 +19,6 @@ import java.util.stream.Collectors;
 public class TeacherService {
 
     private final TeacherRepository teacherRepository;
-    // private final UserRepository userRepository; // Раскомментируй, если есть
 
     public List<TeacherResponse> getAllTeachersPaged(int page, int size) {
         Page<Teacher> teacherPage = teacherRepository.findAll(PageRequest.of(page, size));
@@ -44,15 +42,6 @@ public class TeacherService {
         Teacher teacher = new Teacher();
         teacher.setFullName(request.getFullName());
 
-        // Если передан userId, привязываем пользователя (раскомментируй, когда будет UserRepository)
-        /*
-        if (request.getUserId() != null) {
-            User user = userRepository.findById(request.getUserId())
-                    .orElseThrow(() -> new RuntimeException("Пользователь с ID " + request.getUserId() + " не найден"));
-            teacher.setUser(user);
-        }
-        */
-
         Teacher saved = teacherRepository.save(teacher);
         return mapToResponse(saved);
     }
@@ -68,16 +57,6 @@ public class TeacherService {
 
         teacher.setFullName(request.getFullName());
 
-        /* Изменение юзера при обновлении (опционально)
-        if (request.getUserId() != null) {
-            User user = userRepository.findById(request.getUserId())
-                    .orElseThrow(() -> new RuntimeException("Пользователь с ID " + request.getUserId() + " не найден"));
-            teacher.setUser(user);
-        } else {
-            teacher.setUser(null);
-        }
-        */
-
         return mapToResponse(teacher);
     }
 
@@ -89,7 +68,6 @@ public class TeacherService {
         teacherRepository.deleteById(id);
     }
 
-    // Вспомогательный метод маппинга
     private TeacherResponse mapToResponse(Teacher teacher) {
         Long userId = (teacher.getUser() != null) ? teacher.getUser().getId() : null;
         return new TeacherResponse(teacher.getId(), teacher.getFullName(), userId);

@@ -10,6 +10,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
@@ -22,13 +23,15 @@ public class TeacherController {
     private final TeacherService teacherService;
 
     @PostMapping
-    @Operation(summary = "Добавить преподавателя", description = "Вносит нового преподавателя в систему. Проверяет уникальность ФИО.")
+    @PreAuthorize("hasRole('ADMIN')")
+    @Operation(summary = "Добавить преподавателя", description = "Вносит нового преподавателя в систему. Проверяет уникальность ФИО. Доступно только Администраторам.")
     public ResponseEntity<ApiResponse<TeacherResponse>> createTeacher(@Valid @RequestBody TeacherRequest request) {
         return ResponseEntity.ok(ApiResponse.success(teacherService.createTeacher(request)));
     }
 
     @GetMapping
-    @Operation(summary = "Получить список преподавателей (постранично)", description = "Возвращает список преподавателей вуза с поддержкой пагинации.")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER', 'STUDENT')")
+    @Operation(summary = "Получить список преподавателей (постранично)", description = "Возвращает список преподавателей вуза с поддержкой пагинации. Доступно всем авторизованным пользователям.")
     public ResponseEntity<ApiResponse<List<TeacherResponse>>> getAllTeachers(
             @RequestParam(defaultValue = "0") @Parameter(description = "Номер страницы (с 0)", example = "0") int page,
             @RequestParam(defaultValue = "10") @Parameter(description = "Количество элементов на странице", example = "10") int size) {
@@ -36,14 +39,16 @@ public class TeacherController {
     }
 
     @GetMapping("/{id}")
-    @Operation(summary = "Получить преподавателя по ID", description = "Ищет преподавателя в базе данных по его уникальному идентификатору.")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER', 'STUDENT')")
+    @Operation(summary = "Получить преподавателя по ID", description = "Ищет преподавателя в базе данных по его уникальному идентификатору. Доступно всем авторизованным пользователям.")
     public ResponseEntity<ApiResponse<TeacherResponse>> getTeacherById(
             @PathVariable @Parameter(description = "ID преподавателя", example = "1") Long id) {
         return ResponseEntity.ok(ApiResponse.success(teacherService.getTeacherById(id)));
     }
 
     @PutMapping("/{id}")
-    @Operation(summary = "Обновить данные преподавателя", description = "Позволяет изменить ФИО преподавателя по его ID. Также проверяет ФИО на уникальность.")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER', 'STUDENT')")
+    @Operation(summary = "Обновить данные преподавателя", description = "Позволяет изменить ФИО преподавателя по его ID. Также проверяет ФИО на уникальность. Доступно только Администраторам.")
     public ResponseEntity<ApiResponse<TeacherResponse>> updateTeacher(
             @PathVariable @Parameter(description = "ID преподавателя", example = "1") Long id,
             @Valid @RequestBody TeacherRequest request) {
@@ -51,7 +56,8 @@ public class TeacherController {
     }
 
     @DeleteMapping("/{id}")
-    @Operation(summary = "Удалить преподавателя", description = "Удаляет запись о преподавателе из системы по его ID.")
+    @PreAuthorize("hasRole('ROLE_ADMIN')")
+    @Operation(summary = "Удалить преподавателя", description = "Удаляет запись о преподавателе из системы по его ID. Доступно только Администраторам.")
     public ResponseEntity<ApiResponse<String>> deleteTeacher(
             @PathVariable @Parameter(description = "ID преподавателя", example = "1") Long id) {
         teacherService.deleteTeacher(id);

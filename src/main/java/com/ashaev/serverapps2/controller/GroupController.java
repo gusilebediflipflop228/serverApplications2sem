@@ -10,6 +10,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
@@ -23,24 +24,28 @@ public class GroupController {
 
     @PostMapping
     @Operation(summary = "Создать новую группу", description = "Добавляет новую учебную группу в базу данных.")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<GroupResponse>> createGroup(@Valid @RequestBody GroupRequest request) {
         return ResponseEntity.ok(ApiResponse.success(groupService.createGroup(request)));
     }
 
     @GetMapping
     @Operation(summary = "Получить список всех групп", description = "Возвращает полный список зарегистрированных групп.")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER')")
     public ResponseEntity<ApiResponse<List<GroupResponse>>> getAllGroups() {
         return ResponseEntity.ok(ApiResponse.success(groupService.getAllGroups()));
     }
 
     @GetMapping("/{id}")
-    @Operation(summary = "Получить группу по ID", description = "Ищет учебную группу по её уникальному идентификатору.")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER', 'STUDENT')")
+    @Operation(summary = "Получить группу по ID", description = "Ищет учебную группу по её уникальному идентификатору. Администраторы и преподаватели видят любую группу, студенты — только свою.")
     public ResponseEntity<ApiResponse<GroupResponse>> getGroupById(
             @PathVariable @Parameter(description = "ID группы", example = "1") Long id) {
-        return ResponseEntity.ok(ApiResponse.success(groupService.getGroupById(id)));
+        return ResponseEntity.ok(ApiResponse.success(groupService.getGroupByIdWithCheck(id)));
     }
 
     @PutMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
     @Operation(summary = "Обновить данные группы", description = "Позволяет изменить название существующей учебной группы.")
     public ResponseEntity<ApiResponse<GroupResponse>> updateGroup(
             @PathVariable @Parameter(description = "ID группы", example = "1") Long id,
@@ -49,6 +54,7 @@ public class GroupController {
     }
 
     @DeleteMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
     @Operation(summary = "Удалить группу", description = "Удаляет учебную группу из системы. Убедитесь, что в группе нет привязанных студентов перед удалением!")
     public ResponseEntity<ApiResponse<String>> deleteGroup(
             @PathVariable @Parameter(description = "ID группы", example = "1") Long id) {

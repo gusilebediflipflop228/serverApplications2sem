@@ -8,5 +8,5 @@ import lombok.Data;
 public class TeacherResponse {
     private Long id;
     private String fullName;
-    private Long userId; // Возвращаем ID юзера, если он привязан
+    private Long userId;
 }

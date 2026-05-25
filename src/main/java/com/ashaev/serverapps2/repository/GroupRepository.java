@@ -8,8 +8,6 @@ import java.util.Optional;
 
 @Repository
 public interface GroupRepository extends JpaRepository<Group, Long> {
-    // Метод для проверки, существует ли уже группа с таким именем (для контроля уникальности)
     boolean existsByName(String name);
-
     Optional<Group> findByName(String name);
 }

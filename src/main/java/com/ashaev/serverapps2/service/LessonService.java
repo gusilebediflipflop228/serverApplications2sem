@@ -9,6 +9,8 @@ import com.ashaev.serverapps2.repository.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.security.access.AccessDeniedException; // Импорт обязателен
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -28,7 +30,6 @@ public class LessonService {
     private final DisciplineRepository disciplineRepository;
     private final StudentRepository studentRepository;
 
-    // 1. Создание занятия + автоматическое заполнение ведомости "н-ками"
     @Transactional
     public LessonResponse createLesson(LessonRequest request) {
         Discipline discipline = disciplineRepository.findById(request.getDisciplineId())
@@ -45,41 +46,65 @@ public class LessonService {
         lesson.setClassDate(request.getClassDate());
         lesson.setClassNumber(request.getClassNumber());
 
-        // Сначала сохраняем само занятие
         Lesson savedLesson = lessonRepository.save(lesson);
 
-        // Находим всех студентов этой группы и делаем для них пустые отметки (isPresent = false)
         List<Student> students = studentRepository.findByGroupId(group.getId());
         for (Student student : students) {
             Attendance attendance = new Attendance();
             attendance.setLesson(savedLesson);
             attendance.setStudent(student);
-            attendance.setIsPresent(false); // Изначально ставим, что студента нет
+            attendance.setIsPresent(false);
             attendanceRepository.save(attendance);
 
-            // Добавляем в двунаправленную связь нашего сохраненного занятия
             savedLesson.getAttendances().add(attendance);
         }
 
         return mapToResponse(savedLesson, false);
     }
 
-    // 2. Получить занятие по ID вместе с посещаемостью (ТЗ: вместе с данными о посещаемости)
     public LessonResponse getLessonById(Long id) {
         Lesson lesson = lessonRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Занятие с ID " + id + " не найдено"));
-        return mapToResponse(lesson, true); // true означает, что подгружаем ведомость студентов
+        return mapToResponse(lesson, true);
     }
 
-    // 3. Получить список занятий за период постранично (ТЗ: без данных о посещаемости)
+    public LessonResponse getLessonByIdWithCheck(Long id) {
+        User currentUser = (User) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+        Lesson lesson = lessonRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Занятие с ID " + id + " не найдено"));
+
+        if (currentUser.getRole() == Role.STUDENT) {
+            Student student = studentRepository.findByUser(currentUser)
+                    .orElseThrow(() -> new AccessDeniedException("Вы не числитесь в системе как студент"));
+
+            if (!lesson.getGroup().getId().equals(student.getGroup().getId())) {
+                throw new AccessDeniedException("Доступ запрещен. Вы можете просматривать ведомости только своей группы.");
+            }
+        }
+
+        return mapToResponse(lesson, true);
+    }
+
     public List<LessonResponse> getLessonsPaged(LocalDate start, LocalDate end, Long groupId, Long teacherId, int page, int size) {
         Page<Lesson> lessonPage = lessonRepository.findLessonsForPeriod(start, end, groupId, teacherId, PageRequest.of(page, size));
         return lessonPage.getContent().stream()
-                .map(lesson -> mapToResponse(lesson, false)) // false — список занятий отдаем без студентов
+                .map(lesson -> mapToResponse(lesson, false))
                 .collect(Collectors.toList());
     }
 
-    // 4. Редактировать занятие
+    public List<LessonResponse> getLessonsPagedWithCheck(LocalDate start, LocalDate end, Long groupId, Long teacherId, int page, int size) {
+        User currentUser = (User) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+
+        if (currentUser.getRole() == Role.STUDENT) {
+            Student student = studentRepository.findByUser(currentUser)
+                    .orElseThrow(() -> new AccessDeniedException("Вы не числитесь в системе как студент"));
+
+            groupId = student.getGroup().getId();
+        }
+
+        return getLessonsPaged(start, end, groupId, teacherId, page, size);
+    }
+
     @Transactional
     public LessonResponse updateLesson(Long id, LessonRequest request) {
         Lesson lesson = lessonRepository.findById(id)
@@ -101,7 +126,6 @@ public class LessonService {
         return mapToResponse(lesson, false);
     }
 
-    // 5. Удалить занятие (благодаря cascade = CascadeType.ALL в сущности, посещаемость удалится сама)
     @Transactional
     public void deleteLesson(Long id) {
         if (!lessonRepository.existsById(id)) {
@@ -110,7 +134,6 @@ public class LessonService {
         lessonRepository.deleteById(id);
     }
 
-    // 6. Обновление посещаемости (выставление "энок" и присутствия пачкой)
     @Transactional
     public void updateAttendance(Long lessonId, List<AttendanceUpdateRequest> requests) {
         for (AttendanceUpdateRequest req : requests) {
@@ -120,8 +143,6 @@ public class LessonService {
         }
     }
 
-
-    // Вспомогательный метод маппинга сущности в DTO-ответ
     private LessonResponse mapToResponse(Lesson lesson, boolean includeAttendance) {
         List<AttendanceItemResponse> attendanceList = null;
 

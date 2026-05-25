@@ -13,7 +13,6 @@ import java.time.LocalDate;
 @Repository
 public interface LessonRepository extends JpaRepository<Lesson, Long> {
 
-    // Поиск занятий за период постранично с опциональными фильтрами по группе и преподавателю
     @Query("SELECT l FROM Lesson l WHERE l.classDate BETWEEN :startDate AND :endDate " +
             "AND (:groupId IS NULL OR l.group.id = :groupId) " +
             "AND (:teacherId IS NULL OR l.teacher.id = :teacherId)")

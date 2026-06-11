@@ -1,6 +1,7 @@
 package com.ashaev.serverapps2.controller;
 
 import com.ashaev.serverapps2.dto.ApiResponse;
+import com.ashaev.serverapps2.dto.Auth.RegisterTeacherRequest;
 import com.ashaev.serverapps2.dto.Teacher.TeacherRequest;
 import com.ashaev.serverapps2.dto.Teacher.TeacherResponse;
 import com.ashaev.serverapps2.service.TeacherService;
@@ -24,8 +25,7 @@ public class TeacherController {
 
     @PostMapping
     @PreAuthorize("hasRole('ADMIN')")
-    @Operation(summary = "Добавить преподавателя", description = "Вносит нового преподавателя в систему. Проверяет уникальность ФИО. Доступно только Администраторам.")
-    public ResponseEntity<ApiResponse<TeacherResponse>> createTeacher(@Valid @RequestBody TeacherRequest request) {
+    public ResponseEntity<ApiResponse<TeacherResponse>> createTeacher(@Valid @RequestBody RegisterTeacherRequest request) {
         return ResponseEntity.ok(ApiResponse.success(teacherService.createTeacher(request)));
     }
 

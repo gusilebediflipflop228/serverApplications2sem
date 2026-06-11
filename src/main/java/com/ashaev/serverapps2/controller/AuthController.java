@@ -7,9 +7,11 @@ import com.ashaev.serverapps2.repository.UserRepository;
 import com.ashaev.serverapps2.service.AuthService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -19,7 +21,7 @@ import org.springframework.web.bind.annotation.*;
 public class AuthController {
 
     private final UserRepository userRepository;
-    private final org.springframework.security.crypto.password.PasswordEncoder passwordEncoder;
+    private final PasswordEncoder passwordEncoder;
     private final AuthService authService;
 
     @PostMapping("/login")
@@ -46,6 +48,13 @@ public class AuthController {
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<AuthResponse> registerAdmin(@RequestBody RegisterAdminRequest request) {
         return ResponseEntity.ok(authService.registerAdmin(request));
+    }
+
+    @Operation(summary = "Обновление пары токенов",
+            description = "Принимает валидный Refresh токен и возвращает новую пару Access/Refresh токенов")
+    @PostMapping("/refresh")
+    public ResponseEntity<AuthResponse> refresh(@RequestBody @Valid RefreshTokenRequest request) {
+        return ResponseEntity.ok(authService.refreshToken(request));
     }
 
     @PostMapping("/test-reset-admin")

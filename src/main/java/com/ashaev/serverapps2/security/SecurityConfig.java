@@ -57,6 +57,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/v1/auth/register/teacher").hasRole("ADMIN")
                         .requestMatchers("/api/v1/auth/register/admin").hasRole("ADMIN")
                         .requestMatchers("/api/v1/auth/**").permitAll()
+                        .requestMatchers("/api/auth/refresh").permitAll()
                         .requestMatchers(HttpMethod.DELETE, "/api/v1/**").hasRole("ADMIN")
                         .anyRequest().authenticated()
                 )

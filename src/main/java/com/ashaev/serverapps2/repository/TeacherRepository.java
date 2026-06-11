@@ -10,5 +10,6 @@ import java.util.Optional;
 @Repository
 public interface TeacherRepository extends JpaRepository<Teacher, Long> {
     boolean existsByFullName(String fullName);
-    Optional<Teacher> findByUser(User user);
+    void deleteByUserId(Long userId);
+    boolean existsByUserId(Long userId);
 }

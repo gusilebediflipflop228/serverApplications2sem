@@ -1,6 +1,8 @@
 package com.ashaev.serverapps2.dto.Lesson;
 
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 import java.time.LocalDate;
@@ -26,6 +28,8 @@ public class LessonRequest {
     private LocalDate classDate;
 
     @NotNull(message = "Номер пары обязателен")
+    @Min(value = 1, message = "Номер пары должен быть не менее 1")
+    @Max(value = 8, message = "Номер пары должен быть не более 8")
     @Schema(description = "Номер пары по расписанию (от 1 до 8)", example = "1")
     private Integer classNumber;
 }

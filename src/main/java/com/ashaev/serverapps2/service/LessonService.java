@@ -5,18 +5,17 @@ import com.ashaev.serverapps2.dto.Attendance.AttendanceUpdateRequest;
 import com.ashaev.serverapps2.dto.Lesson.LessonRequest;
 import com.ashaev.serverapps2.dto.Lesson.LessonResponse;
 import com.ashaev.serverapps2.entity.*;
+import com.ashaev.serverapps2.exception.AppException;
+import com.ashaev.serverapps2.exception.ErrorCode;
 import com.ashaev.serverapps2.repository.*;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
-import org.springframework.security.access.AccessDeniedException; // Импорт обязателен
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.util.List;
-import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -31,91 +30,16 @@ public class LessonService {
     private final StudentRepository studentRepository;
 
     @Transactional
-    public LessonResponse createLesson(LessonRequest request) {
-        Discipline discipline = disciplineRepository.findById(request.getDisciplineId())
-                .orElseThrow(() -> new RuntimeException("Дисциплина с ID " + request.getDisciplineId() + " не найдена"));
-        Group group = groupRepository.findById(request.getGroupId())
-                .orElseThrow(() -> new RuntimeException("Группа с ID " + request.getGroupId() + " не найдена"));
-        Teacher teacher = teacherRepository.findById(request.getTeacherId())
-                .orElseThrow(() -> new RuntimeException("Преподаватель с ID " + request.getTeacherId() + " не найден"));
-
-        Lesson lesson = new Lesson();
-        lesson.setDiscipline(discipline);
-        lesson.setGroup(group);
-        lesson.setTeacher(teacher);
-        lesson.setClassDate(request.getClassDate());
-        lesson.setClassNumber(request.getClassNumber());
-
-        Lesson savedLesson = lessonRepository.save(lesson);
-
-        List<Student> students = studentRepository.findByGroupId(group.getId());
-        for (Student student : students) {
-            Attendance attendance = new Attendance();
-            attendance.setLesson(savedLesson);
-            attendance.setStudent(student);
-            attendance.setIsPresent(false);
-            attendanceRepository.save(attendance);
-
-            savedLesson.getAttendances().add(attendance);
-        }
-
-        return mapToResponse(savedLesson, false);
-    }
-
-    public LessonResponse getLessonById(Long id) {
-        Lesson lesson = lessonRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Занятие с ID " + id + " не найдено"));
-        return mapToResponse(lesson, true);
-    }
-
-    public LessonResponse getLessonByIdWithCheck(Long id) {
-        User currentUser = (User) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
-        Lesson lesson = lessonRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Занятие с ID " + id + " не найдено"));
-
-        if (currentUser.getRole() == Role.STUDENT) {
-            Student student = studentRepository.findByUser(currentUser)
-                    .orElseThrow(() -> new AccessDeniedException("Вы не числитесь в системе как студент"));
-
-            if (!lesson.getGroup().getId().equals(student.getGroup().getId())) {
-                throw new AccessDeniedException("Доступ запрещен. Вы можете просматривать ведомости только своей группы.");
-            }
-        }
-
-        return mapToResponse(lesson, true);
-    }
-
-    public List<LessonResponse> getLessonsPaged(LocalDate start, LocalDate end, Long groupId, Long teacherId, int page, int size) {
-        Page<Lesson> lessonPage = lessonRepository.findLessonsForPeriod(start, end, groupId, teacherId, PageRequest.of(page, size));
-        return lessonPage.getContent().stream()
-                .map(lesson -> mapToResponse(lesson, false))
-                .collect(Collectors.toList());
-    }
-
-    public List<LessonResponse> getLessonsPagedWithCheck(LocalDate start, LocalDate end, Long groupId, Long teacherId, int page, int size) {
-        User currentUser = (User) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
-
-        if (currentUser.getRole() == Role.STUDENT) {
-            Student student = studentRepository.findByUser(currentUser)
-                    .orElseThrow(() -> new AccessDeniedException("Вы не числитесь в системе как студент"));
-
-            groupId = student.getGroup().getId();
-        }
-
-        return getLessonsPaged(start, end, groupId, teacherId, page, size);
-    }
-
-    @Transactional
     public LessonResponse updateLesson(Long id, LessonRequest request) {
         Lesson lesson = lessonRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Занятие с ID " + id + " не найдено"));
+                .orElseThrow(() -> new AppException(ErrorCode.LESSON_NOT_FOUND, id));
 
         Discipline discipline = disciplineRepository.findById(request.getDisciplineId())
-                .orElseThrow(() -> new RuntimeException("Дисциплина не найдена"));
+                .orElseThrow(() -> new AppException(ErrorCode.SUBJECT_NOT_FOUND, request.getDisciplineId()));
         Group group = groupRepository.findById(request.getGroupId())
-                .orElseThrow(() -> new RuntimeException("Группа не найдена"));
+                .orElseThrow(() -> new AppException(ErrorCode.GROUP_NOT_FOUND, request.getGroupId()));
         Teacher teacher = teacherRepository.findById(request.getTeacherId())
-                .orElseThrow(() -> new RuntimeException("Преподаватель не найден"));
+                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND, request.getTeacherId()));
 
         lesson.setDiscipline(discipline);
         lesson.setGroup(group);
@@ -129,45 +53,99 @@ public class LessonService {
     @Transactional
     public void deleteLesson(Long id) {
         if (!lessonRepository.existsById(id)) {
-            throw new RuntimeException("Занятие с ID " + id + " не найдено");
+            throw new AppException(ErrorCode.LESSON_NOT_FOUND, id);
         }
         lessonRepository.deleteById(id);
+    }
+
+    public List<LessonResponse> getLessonsPagedWithCheck(LocalDate start, LocalDate end, Long groupId, Long teacherId, int page, int size) {
+        User currentUser = (User) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+        if (currentUser.getRole() == Role.STUDENT) {
+            Student student = studentRepository.findByUser(currentUser)
+                    .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND, currentUser.getUsername()));
+            groupId = student.getGroup().getId();
+        }
+
+        return getLessonsPaged(start, end, groupId, teacherId, page, size);
+    }
+
+    @Transactional
+    public LessonResponse createLesson(LessonRequest request) {
+        Discipline discipline = disciplineRepository.findById(request.getDisciplineId())
+                .orElseThrow(() -> new AppException(ErrorCode.SUBJECT_NOT_FOUND, request.getDisciplineId()));
+        Group group = groupRepository.findById(request.getGroupId())
+                .orElseThrow(() -> new AppException(ErrorCode.GROUP_NOT_FOUND, request.getGroupId()));
+        Teacher teacher = teacherRepository.findById(request.getTeacherId())
+                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND, request.getTeacherId()));
+
+        Lesson lesson = Lesson.builder()
+                .discipline(discipline)
+                .group(group)
+                .teacher(teacher)
+                .classDate(request.getClassDate())
+                .classNumber(request.getClassNumber())
+                .build();
+
+        Lesson savedLesson = lessonRepository.save(lesson);
+
+        List<Attendance> attendances = studentRepository.findByGroupId(group.getId()).stream()
+                .map(student -> Attendance.builder()
+                        .lesson(savedLesson)
+                        .student(student)
+                        .isPresent(false)
+                        .build())
+                .toList();
+
+        attendanceRepository.saveAll(attendances);
+        savedLesson.setAttendances(attendances);
+
+        return mapToResponse(savedLesson, false);
+    }
+
+    public LessonResponse getLessonByIdWithCheck(Long id) {
+        User currentUser = (User) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+        Lesson lesson = lessonRepository.findById(id)
+                .orElseThrow(() -> new AppException(ErrorCode.LESSON_NOT_FOUND, id));
+
+        if (currentUser.getRole() == Role.STUDENT) {
+            Student student = studentRepository.findByUser(currentUser)
+                    .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND, currentUser.getUsername()));
+
+            if (!lesson.getGroup().getId().equals(student.getGroup().getId())) {
+                throw new AppException(ErrorCode.ACCESS_DENIED);
+            }
+        }
+        return mapToResponse(lesson, true);
+    }
+
+    public List<LessonResponse> getLessonsPaged(LocalDate start, LocalDate end, Long groupId, Long teacherId, int page, int size) {
+        return lessonRepository.findLessonsForPeriod(start, end, groupId, teacherId, PageRequest.of(page, size))
+                .map(lesson -> mapToResponse(lesson, false))
+                .getContent();
     }
 
     @Transactional
     public void updateAttendance(Long lessonId, List<AttendanceUpdateRequest> requests) {
         for (AttendanceUpdateRequest req : requests) {
             Attendance attendance = attendanceRepository.findByLessonIdAndStudentId(lessonId, req.getStudentId())
-                    .orElseThrow(() -> new RuntimeException("Запись посещаемости для студента с ID " + req.getStudentId() + " на этом занятии не найдена"));
+                    .orElseThrow(() -> new AppException(ErrorCode.ATTENDANCE_NOT_FOUND));
             attendance.setIsPresent(req.getIsPresent());
         }
     }
 
     private LessonResponse mapToResponse(Lesson lesson, boolean includeAttendance) {
         List<AttendanceItemResponse> attendanceList = null;
-
         if (includeAttendance && lesson.getAttendances() != null) {
             attendanceList = lesson.getAttendances().stream()
-                    .map(a -> new AttendanceItemResponse(
-                            a.getId(),
-                            a.getStudent().getId(),
-                            a.getStudent().getFullName(),
-                            a.getIsPresent()
-                    ))
-                    .collect(Collectors.toList());
+                    .map(a -> new AttendanceItemResponse(a.getId(), a.getStudent().getId(), a.getStudent().getFullName(), a.getIsPresent()))
+                    .toList();
         }
 
         return new LessonResponse(
-                lesson.getId(),
-                lesson.getDiscipline().getId(),
-                lesson.getDiscipline().getName(),
-                lesson.getGroup().getId(),
-                lesson.getGroup().getName(),
-                lesson.getTeacher().getId(),
-                lesson.getTeacher().getFullName(),
-                lesson.getClassDate(),
-                lesson.getClassNumber(),
-                attendanceList
+                lesson.getId(), lesson.getDiscipline().getId(), lesson.getDiscipline().getName(),
+                lesson.getGroup().getId(), lesson.getGroup().getName(),
+                lesson.getTeacher().getId(), lesson.getTeacher().getFullName(),
+                lesson.getClassDate(), lesson.getClassNumber(), attendanceList
         );
     }
 }

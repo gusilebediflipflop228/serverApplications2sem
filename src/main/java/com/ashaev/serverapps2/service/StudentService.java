@@ -3,20 +3,17 @@ package com.ashaev.serverapps2.service;
 import com.ashaev.serverapps2.dto.Group.GroupResponse;
 import com.ashaev.serverapps2.dto.Student.StudentRequest;
 import com.ashaev.serverapps2.dto.Student.StudentResponse;
-import com.ashaev.serverapps2.entity.Group;
-import com.ashaev.serverapps2.entity.Role;
-import com.ashaev.serverapps2.entity.Student;
-import com.ashaev.serverapps2.entity.User;
+import com.ashaev.serverapps2.entity.*;
+import com.ashaev.serverapps2.exception.AppException;
+import com.ashaev.serverapps2.exception.ErrorCode;
 import com.ashaev.serverapps2.repository.GroupRepository;
 import com.ashaev.serverapps2.repository.StudentRepository;
 import lombok.RequiredArgsConstructor;
-import org.springframework.security.access.AccessDeniedException; // Импорт обязателен
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
-import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -28,74 +25,64 @@ public class StudentService {
 
     public List<StudentResponse> getStudentsByGroupId(Long groupId) {
         if (!groupRepository.existsById(groupId)) {
-            throw new RuntimeException("Группа с ID " + groupId + " не найдена");
+            throw new AppException(ErrorCode.GROUP_NOT_FOUND, groupId);
         }
         return studentRepository.findByGroupId(groupId).stream()
                 .map(this::mapToResponse)
-                .collect(Collectors.toList());
+                .toList();
     }
 
     public List<StudentResponse> getStudentsByGroupIdWithCheck(Long groupId) {
-        User currentUser = (User) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
-        if (currentUser.getRole() == Role.STUDENT) {
-            Student student = studentRepository.findByUser(currentUser)
-                    .orElseThrow(() -> new AccessDeniedException("Вы не числитесь в системе как студент"));
-
-            if (!student.getGroup().getId().equals(groupId)) {
-                throw new AccessDeniedException("Доступ запрещен. Вы можете просматривать только студентов своей группы.");
-            }
-        }
-
+        checkStudentAccessGroup(groupId);
         return getStudentsByGroupId(groupId);
     }
 
     public StudentResponse getStudentById(Long id) {
-        Student student = studentRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Студент с ID " + id + " не найден"));
-        return mapToResponse(student);
+        return studentRepository.findById(id)
+                .map(this::mapToResponse)
+                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND, id));
     }
 
     public StudentResponse getStudentByIdWithCheck(Long id) {
         User currentUser = (User) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+
         if (currentUser.getRole() == Role.STUDENT) {
             Student student = studentRepository.findByUser(currentUser)
-                    .orElseThrow(() -> new AccessDeniedException("Вы не числитесь в системе как student"));
+                    .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND, currentUser.getUsername()));
 
             if (!student.getId().equals(id)) {
-                throw new AccessDeniedException("Доступ запрещен. Студент может просматривать только свою личную информацию.");
+                throw new AppException(ErrorCode.ACCESS_DENIED);
             }
         }
-
         return getStudentById(id);
     }
 
     @Transactional
     public StudentResponse createStudent(StudentRequest request) {
         Group group = groupRepository.findById(request.getGroupId())
-                .orElseThrow(() -> new RuntimeException("Нельзя создать студента: группа с ID " + request.getGroupId() + " не существует"));
+                .orElseThrow(() -> new AppException(ErrorCode.GROUP_NOT_FOUND, request.getGroupId()));
 
         if (studentRepository.existsByFullName(request.getFullName())) {
-            throw new RuntimeException("Студент с ФИО '" + request.getFullName() + "' уже существует");
+            throw new AppException(ErrorCode.INVALID_INPUT, "Студент '" + request.getFullName() + "' уже существует");
         }
 
         Student student = new Student();
         student.setFullName(request.getFullName());
         student.setGroup(group);
 
-        Student savedStudent = studentRepository.save(student);
-        return mapToResponse(savedStudent);
+        return mapToResponse(studentRepository.save(student));
     }
 
     @Transactional
     public StudentResponse updateStudent(Long id, StudentRequest request) {
         Student student = studentRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Студент с ID " + id + " не найден"));
+                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND, id));
 
         Group group = groupRepository.findById(request.getGroupId())
-                .orElseThrow(() -> new RuntimeException("Группа с ID " + request.getGroupId() + " не существует"));
+                .orElseThrow(() -> new AppException(ErrorCode.GROUP_NOT_FOUND, request.getGroupId()));
 
         if (!student.getFullName().equals(request.getFullName()) && studentRepository.existsByFullName(request.getFullName())) {
-            throw new RuntimeException("Студент с ФИО '" + request.getFullName() + "' уже существует");
+            throw new AppException(ErrorCode.INVALID_INPUT, "Студент '" + request.getFullName() + "' уже существует");
         }
 
         student.setFullName(request.getFullName());
@@ -107,7 +94,7 @@ public class StudentService {
     @Transactional
     public void deleteStudent(Long id) {
         if (!studentRepository.existsById(id)) {
-            throw new RuntimeException("Студент с ID " + id + " не найден");
+            throw new AppException(ErrorCode.USER_NOT_FOUND, id);
         }
         studentRepository.deleteById(id);
     }
@@ -115,5 +102,17 @@ public class StudentService {
     private StudentResponse mapToResponse(Student student) {
         GroupResponse groupResponse = new GroupResponse(student.getGroup().getId(), student.getGroup().getName());
         return new StudentResponse(student.getId(), student.getFullName(), groupResponse);
+    }
+
+    private void checkStudentAccessGroup(Long groupId) {
+        User currentUser = (User) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+        if (currentUser.getRole() == Role.STUDENT) {
+            Student student = studentRepository.findByUser(currentUser)
+                    .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND, currentUser.getUsername()));
+
+            if (!student.getGroup().getId().equals(groupId)) {
+                throw new AppException(ErrorCode.ACCESS_DENIED);
+            }
+        }
     }
 }

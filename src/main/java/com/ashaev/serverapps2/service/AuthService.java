@@ -2,10 +2,9 @@ package com.ashaev.serverapps2.service;
 
 import com.ashaev.serverapps2.dto.Auth.*;
 import com.ashaev.serverapps2.entity.*;
-import com.ashaev.serverapps2.repository.GroupRepository;
-import com.ashaev.serverapps2.repository.StudentRepository;
-import com.ashaev.serverapps2.repository.TeacherRepository;
-import com.ashaev.serverapps2.repository.UserRepository;
+import com.ashaev.serverapps2.exception.AppException;
+import com.ashaev.serverapps2.exception.ErrorCode;
+import com.ashaev.serverapps2.repository.*;
 import com.ashaev.serverapps2.security.JwtService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -29,64 +28,101 @@ public class AuthService {
         authenticationManager.authenticate(
                 new UsernamePasswordAuthenticationToken(request.username(), request.password())
         );
-        var user = userRepository.findByUsername(request.username()).orElseThrow();
-        var jwt = jwtService.generateAccessToken(user);
-        var refreshToken = jwtService.generateRefreshToken(user);
-        return new AuthResponse(jwt, refreshToken, user.getRole());
+
+        var user = userRepository.findByUsername(request.username())
+                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND, request.username()));
+
+        return createAuthResponse(user);
     }
 
     @Transactional
     public AuthResponse registerStudent(RegisterRequest request) {
-        if (userRepository.existsByUsername(request.username())) {
-            throw new RuntimeException("Пользователь уже существует");
-        }
+        checkUserExists(request.username());
 
         Group group = groupRepository.findByName(request.groupCode())
-                .orElseThrow(() -> new RuntimeException("Группа не найдена"));
+                .orElseThrow(() -> new AppException(ErrorCode.GROUP_NOT_FOUND, request.groupCode()));
 
-        var user = User.builder()
-                .username(request.username())
-                .password(passwordEncoder.encode(request.password()))
-                .role(Role.STUDENT)
-                .build();
-        userRepository.save(user);
+        var user = createUser(request.username(), request.password(), Role.STUDENT);
 
-        studentRepository.save(Student.builder().user(user).group(group).fullName(request.fullName()).build());
+        studentRepository.save(Student.builder()
+                .user(user)
+                .group(group)
+                .fullName(request.fullName())
+                .build());
 
-        return new AuthResponse(jwtService.generateAccessToken(user), jwtService.generateRefreshToken(user), user.getRole());
+        return createAuthResponse(user);
     }
 
     @Transactional
     public AuthResponse registerTeacher(RegisterTeacherRequest request) {
-        if (userRepository.existsByUsername(request.username())) {
-            throw new RuntimeException("Пользователь уже существует");
-        }
+        checkUserExists(request.username());
 
-        var user = User.builder()
+        User user = User.builder()
                 .username(request.username())
                 .password(passwordEncoder.encode(request.password()))
                 .role(Role.TEACHER)
                 .build();
-        userRepository.save(user);
 
-        teacherRepository.save(Teacher.builder().user(user).fullName(request.fullName()).build());
+        // ПРЯМО ТУТ ДЕЛАЕМ СОХРАНЕНИЕ
+        user = userRepository.save(user);
+        userRepository.flush(); // ОБЯЗАТЕЛЬНО СБРОС
 
-        return new AuthResponse(jwtService.generateAccessToken(user), jwtService.generateRefreshToken(user), user.getRole());
+        // ПРОВЕРКА
+        System.err.println("DEBUG: User saved with ID: " + user.getId());
+
+        if (user.getId() == null) {
+            throw new RuntimeException("ОШИБКА: Пользователь не сохранился, ID пустой!");
+        }
+
+        Teacher teacher = new Teacher();
+        teacher.setFullName(request.fullName());
+        teacher.setUser(user);
+
+        teacherRepository.save(teacher);
+
+        return createAuthResponse(user);
     }
+
 
     @Transactional
     public AuthResponse registerAdmin(RegisterAdminRequest request) {
-        if (userRepository.existsByUsername(request.username())) {
-            throw new RuntimeException("Пользователь уже существует");
+        checkUserExists(request.username());
+        var user = createUser(request.username(), request.password(), Role.ADMIN);
+        return createAuthResponse(user);
+    }
+
+    public AuthResponse refreshToken(RefreshTokenRequest request) {
+        String username = jwtService.extractUsername(request.refreshToken());
+
+        User user = userRepository.findByUsername(username)
+                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND, username));
+
+        if (!jwtService.isTokenValid(request.refreshToken(), username)) {
+            throw new AppException(ErrorCode.REFRESH_TOKEN_EXPIRED);
         }
 
-        var user = User.builder()
-                .username(request.username())
-                .password(passwordEncoder.encode(request.password()))
-                .role(Role.ADMIN)
-                .build();
-        userRepository.save(user);
+        return createAuthResponse(user);
+    }
 
-        return new AuthResponse(jwtService.generateAccessToken(user), jwtService.generateRefreshToken(user), user.getRole());
+    private void checkUserExists(String username) {
+        if (userRepository.existsByUsername(username)) {
+            throw new AppException(ErrorCode.USER_ALREADY_EXISTS, username);
+        }
+    }
+
+    private User createUser(String username, String password, Role role) {
+        return userRepository.save(User.builder()
+                .username(username)
+                .password(passwordEncoder.encode(password))
+                .role(role)
+                .build());
+    }
+
+    private AuthResponse createAuthResponse(User user) {
+        return new AuthResponse(
+                jwtService.generateAccessToken(user),
+                jwtService.generateRefreshToken(user),
+                user.getRole()
+        );
     }
 }

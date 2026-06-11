@@ -5,16 +5,16 @@ import com.ashaev.serverapps2.dto.Group.GroupResponse;
 import com.ashaev.serverapps2.entity.Group;
 import com.ashaev.serverapps2.entity.Role;
 import com.ashaev.serverapps2.entity.User;
+import com.ashaev.serverapps2.exception.AppException;
+import com.ashaev.serverapps2.exception.ErrorCode;
 import com.ashaev.serverapps2.repository.GroupRepository;
-import com.ashaev.serverapps2.repository.StudentRepository; // Импортируем твой репозиторий студентов
+import com.ashaev.serverapps2.repository.StudentRepository;
 import lombok.RequiredArgsConstructor;
-import org.springframework.security.access.AccessDeniedException; // Важно для правильной 403 ошибки
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
-import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -26,14 +26,14 @@ public class GroupService {
 
     public List<GroupResponse> getAllGroups() {
         return groupRepository.findAll().stream()
-                .map(group -> new GroupResponse(group.getId(), group.getName()))
-                .collect(Collectors.toList());
+                .map(this::mapToResponse)
+                .toList();
     }
 
     public GroupResponse getGroupById(Long id) {
-        Group group = groupRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Группа с ID " + id + " не найдена"));
-        return new GroupResponse(group.getId(), group.getName());
+        return groupRepository.findById(id)
+                .map(this::mapToResponse)
+                .orElseThrow(() -> new AppException(ErrorCode.GROUP_NOT_FOUND, id));
     }
 
     public GroupResponse getGroupByIdWithCheck(Long id) {
@@ -41,10 +41,10 @@ public class GroupService {
 
         if (currentUser.getRole() == Role.STUDENT) {
             var student = studentRepository.findByUser(currentUser)
-                    .orElseThrow(() -> new AccessDeniedException("Вы не числитесь в системе как студент"));
+                    .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND, currentUser.getUsername()));
 
             if (!student.getGroup().getId().equals(id)) {
-                throw new AccessDeniedException("Доступ запрещен. Студент может просматривать только свою группу.");
+                throw new AppException(ErrorCode.ACCESS_DENIED);
             }
         }
         return getGroupById(id);
@@ -53,32 +53,39 @@ public class GroupService {
     @Transactional
     public GroupResponse createGroup(GroupRequest request) {
         if (groupRepository.existsByName(request.getName())) {
-            throw new RuntimeException("Группа с названием '" + request.getName() + "' уже существует");
+            throw new AppException(ErrorCode.INVALID_INPUT, "Группа с названием '" + request.getName() + "' уже существует");
         }
         Group group = new Group();
         group.setName(request.getName());
-        Group savedGroup = groupRepository.save(group);
-        return new GroupResponse(savedGroup.getId(), savedGroup.getName());
+        return mapToResponse(groupRepository.save(group));
     }
 
     @Transactional
     public GroupResponse updateGroup(Long id, GroupRequest request) {
         Group group = groupRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Группа с ID " + id + " не найдена"));
+                .orElseThrow(() -> new AppException(ErrorCode.GROUP_NOT_FOUND, id));
 
         if (!group.getName().equals(request.getName()) && groupRepository.existsByName(request.getName())) {
-            throw new RuntimeException("Группа с названием '" + request.getName() + "' уже существует");
+            throw new AppException(ErrorCode.INVALID_INPUT, "Группа с названием '" + request.getName() + "' уже существует");
         }
 
         group.setName(request.getName());
-        return new GroupResponse(group.getId(), group.getName());
+        return mapToResponse(group);
     }
 
     @Transactional
     public void deleteGroup(Long id) {
-        if (!groupRepository.existsById(id)) {
-            throw new RuntimeException("Группа с ID " + id + " не найдена");
+        Group group = groupRepository.findById(id)
+                .orElseThrow(() -> new AppException(ErrorCode.GROUP_NOT_FOUND, id));
+
+        if (studentRepository.countByGroupId(id) > 0) {
+            throw new AppException(ErrorCode.DEPENDENCY_VIOLATION, "Группу невозможно удалить, так как в ней есть студенты");
         }
-        groupRepository.deleteById(id);
+
+        groupRepository.delete(group);
+    }
+
+    private GroupResponse mapToResponse(Group group) {
+        return new GroupResponse(group.getId(), group.getName());
     }
 }

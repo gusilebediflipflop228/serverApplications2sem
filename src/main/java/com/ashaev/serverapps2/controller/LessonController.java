@@ -73,8 +73,8 @@ public class LessonController {
     @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER', 'STUDENT')")
     @Operation(summary = "Получить расписание с фильтрами и пагинацией", description = "Позволяет выгрузить список пар за определенный период времени. Студенты всегда получают расписание только своей группы.")
     public ResponseEntity<ApiResponse<List<LessonResponse>>> getLessons(
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) @Parameter(description = "Начало периода (ГГГГ-ММ-ДД)", example = "2026-05-01") LocalDate startDate,
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) @Parameter(description = "Конец периода (ГГГГ-ММ-ДД)", example = "2026-05-31") LocalDate endDate,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) @Parameter(description = "Начало периода (ГГГГ-ММ-ДД)", example = "2026-05-01") LocalDate startDate,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) @Parameter(description = "Конец периода (ГГГГ-ММ-ДД)", example = "2026-05-31") LocalDate endDate,
             @RequestParam(required = false) @Parameter(description = "Фильтр по ID группы", example = "1") Long groupId,
             @RequestParam(required = false) @Parameter(description = "Фильтр по ID преподавателя", example = "1") Long teacherId,
             @RequestParam(defaultValue = "0") @Parameter(description = "Номер страницы (начиная с 0)", example = "0") int page,

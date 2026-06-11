@@ -1,71 +1,93 @@
 package com.ashaev.serverapps2.service;
 
+import com.ashaev.serverapps2.dto.Auth.RegisterTeacherRequest;
 import com.ashaev.serverapps2.dto.Teacher.TeacherRequest;
 import com.ashaev.serverapps2.dto.Teacher.TeacherResponse;
+import com.ashaev.serverapps2.entity.Role;
 import com.ashaev.serverapps2.entity.Teacher;
+import com.ashaev.serverapps2.entity.User;
+import com.ashaev.serverapps2.exception.AppException;
+import com.ashaev.serverapps2.exception.ErrorCode;
 import com.ashaev.serverapps2.repository.TeacherRepository;
+import com.ashaev.serverapps2.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.Page;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
-import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class TeacherService {
-
+    private final UserRepository userRepository;
     private final TeacherRepository teacherRepository;
+    private final PasswordEncoder passwordEncoder;
+
 
     public List<TeacherResponse> getAllTeachersPaged(int page, int size) {
-        Page<Teacher> teacherPage = teacherRepository.findAll(PageRequest.of(page, size));
-        return teacherPage.getContent().stream()
+        return teacherRepository.findAll(PageRequest.of(page, size))
                 .map(this::mapToResponse)
-                .collect(Collectors.toList());
+                .toList();
     }
 
     public TeacherResponse getTeacherById(Long id) {
-        Teacher teacher = teacherRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Преподаватель с ID " + id + " не найден"));
-        return mapToResponse(teacher);
+        return teacherRepository.findById(id)
+                .map(this::mapToResponse)
+                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND, id));
     }
 
     @Transactional
-    public TeacherResponse createTeacher(TeacherRequest request) {
-        if (teacherRepository.existsByFullName(request.getFullName())) {
-            throw new RuntimeException("Преподаватель с ФИО '" + request.getFullName() + "' уже существует");
+    public TeacherResponse createTeacher(RegisterTeacherRequest request) {
+        if (teacherRepository.existsByFullName(request.fullName())) {
+            throw new AppException(ErrorCode.INVALID_INPUT, "Преподаватель '" + request.fullName() + "' уже существует");
         }
 
-        Teacher teacher = new Teacher();
-        teacher.setFullName(request.getFullName());
+        User user = User.builder()
+                .username(request.username())
+                .password(passwordEncoder.encode(request.password()))
+                .role(Role.TEACHER)
+                .build();
 
-        Teacher saved = teacherRepository.save(teacher);
-        return mapToResponse(saved);
+        user = userRepository.saveAndFlush(user);
+        Teacher teacher = new Teacher();
+        teacher.setFullName(request.fullName());
+        teacher.setUser(user);
+        Teacher savedTeacher = teacherRepository.save(teacher);
+
+        return mapToResponse(savedTeacher);
     }
 
     @Transactional
     public TeacherResponse updateTeacher(Long id, TeacherRequest request) {
         Teacher teacher = teacherRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Преподаватель с ID " + id + " не найден"));
+                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND, id));
 
         if (!teacher.getFullName().equals(request.getFullName()) && teacherRepository.existsByFullName(request.getFullName())) {
-            throw new RuntimeException("Преподаватель с ФИО '" + request.getFullName() + "' уже существует");
+            throw new AppException(ErrorCode.INVALID_INPUT, "Преподаватель '" + request.getFullName() + "' уже существует");
         }
 
         teacher.setFullName(request.getFullName());
-
         return mapToResponse(teacher);
     }
+
 
     @Transactional
     public void deleteTeacher(Long id) {
         if (!teacherRepository.existsById(id)) {
-            throw new RuntimeException("Преподаватель с ID " + id + " не найден");
+            throw new AppException(ErrorCode.TEACHER_NOT_FOUND, id);
         }
-        teacherRepository.deleteById(id);
+
+        try {
+            teacherRepository.deleteById(id);
+            teacherRepository.flush();
+        } catch (DataIntegrityViolationException e) {
+            throw new AppException(ErrorCode.DEPENDENCY_VIOLATION,
+                    "Невозможно удалить, так как есть зависимые данные: учитель закреплен за расписанием");
+        }
     }
 
     private TeacherResponse mapToResponse(Teacher teacher) {

@@ -1,0 +1,1 @@
+ALTER TABLE teachers ALTER COLUMN user_id SET NOT NULL;

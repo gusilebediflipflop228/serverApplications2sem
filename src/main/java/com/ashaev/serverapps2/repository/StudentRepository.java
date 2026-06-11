@@ -18,4 +18,6 @@ public interface StudentRepository extends JpaRepository<Student, Long> {
     List<Student> findByGroupId(Long groupId);
 
     boolean existsByFullName(String fullName);
+
+    long countByGroupId(Long groupId);
 }

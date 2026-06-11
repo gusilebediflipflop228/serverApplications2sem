@@ -3,20 +3,24 @@ package com.ashaev.serverapps2.exception;
 import com.ashaev.serverapps2.dto.ApiErrorResponse;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.AuthenticationException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import lombok.extern.slf4j.Slf4j;
 
+import java.nio.file.AccessDeniedException;
 import java.util.List;
 import java.util.stream.Collectors;
 
+@Slf4j
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
     @ExceptionHandler(RuntimeException.class)
     public ResponseEntity<ApiErrorResponse> handleRuntimeException(RuntimeException ex) {
         ApiErrorResponse response = ApiErrorResponse.error(
-                "BAD_REQUEST",
+                4001,
                 ex.getMessage(),
                 null
         );
@@ -29,21 +33,44 @@ public class GlobalExceptionHandler {
                 .map(error -> error.getField() + ": " + error.getDefaultMessage())
                 .collect(Collectors.toList());
 
-        ApiErrorResponse response = ApiErrorResponse.error(
-                "VALIDATION_ERROR",
-                "Входные данные не прошли валидацию",
-                details
+        return new ResponseEntity<>(
+                ApiErrorResponse.error(ErrorCode.INVALID_INPUT.getCode(), "Входные данные не прошли валидацию", details),
+                HttpStatus.BAD_REQUEST
         );
-        return new ResponseEntity<>(response, HttpStatus.BAD_REQUEST);
     }
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiErrorResponse> handleAllExceptions(Exception ex) {
-        ApiErrorResponse response = ApiErrorResponse.error(
-                "INTERNAL_SERVER_ERROR",
-                "Произошла внутренняя ошибка сервера",
-                List.of(ex.getMessage() != null ? ex.getMessage() : "Unknown error")
+        log.error("Системная ошибка: ", ex);
+
+        return new ResponseEntity<>(
+                ApiErrorResponse.error(ErrorCode.INTERNAL_SERVER_ERROR.getCode(), ErrorCode.INTERNAL_SERVER_ERROR.getMessage(), null),
+                HttpStatus.INTERNAL_SERVER_ERROR
         );
-        return new ResponseEntity<>(response, HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+
+    @ExceptionHandler(org.springframework.security.access.AccessDeniedException.class)
+    public ResponseEntity<ApiErrorResponse> handleAccessDenied(AccessDeniedException ex) {
+        return new ResponseEntity<>(
+                ApiErrorResponse.error(ErrorCode.ACCESS_DENIED.getCode(), ErrorCode.ACCESS_DENIED.getMessage(), null),
+                HttpStatus.FORBIDDEN
+        );
+    }
+
+    @ExceptionHandler(org.springframework.security.core.AuthenticationException.class)
+    public ResponseEntity<ApiErrorResponse> handleAuthException(AuthenticationException ex) {
+        return new ResponseEntity<>(
+                ApiErrorResponse.error(1003, "Ошибка аутентификации: " + ex.getMessage(), null),
+                HttpStatus.UNAUTHORIZED
+        );
+    }
+
+    @ExceptionHandler(AppException.class)
+    public ResponseEntity<ApiErrorResponse> handleAppException(AppException ex) {
+        ErrorCode error = ex.getErrorCode();
+        return new ResponseEntity<>(
+                ApiErrorResponse.error(error.getCode(), ex.getMessage(), null),
+                error.getStatus()
+        );
     }
 }

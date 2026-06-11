@@ -9,9 +9,31 @@ services:
       POSTGRES_PASSWORD: postgres_password
       POSTGRES_DB: attendance_db
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
+    networks:
+          - app-network
+
+  app:
+    build: .
+    container_name: attendance_app
+    ports:
+      - "8080:8080"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres_db:5432/attendance_db
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: postgres_password
+      SPRING_JPA_HIBERNATE_DDL_AUTO: update
+      JWT_SECRET: "ZXhhbXBsZXNlY3JldGtleWZvcnNwcmluZ2Jvb3RzZWN1cml0eWp3dHRva2Vuc2dlbmVyYXRpb255b3VyYXBwbGljYXRpb24"
+    depends_on:
+      - postgres_db
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge
 
 volumes:
   pgdata:

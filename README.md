@@ -1,11 +1,14 @@
-# [Система учета посещаемости занятий студентами]
+# Система учета посещаемости занятий студентами
 
 [![Spring Boot](https://img.shields.io/badge/Spring_Boot-3.4.1-brightgreen)](https://spring.io/projects/spring-boot)
 [![Docker](https://img.shields.io/badge/Docker-Enabled-blue)](https://www.docker.com/)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15-blue)]()
 <img src="https://img.shields.io/badge/JWT-Security-red" alt="JWT">
+<img src="https://img.shields.io/badge/Maven-C71A36?logo=apachemaven&logoColor=white">
+  <img src="https://img.shields.io/badge/Flyway-CC0200?logo=flyway&logoColor=white">
+  <img src="https://img.shields.io/badge/Swagger-85EA2D?logo=swagger&logoColor=black">
 
-[Краткое описание проекта: "Система управления посещаемостью для отслеживания студентов/сотрудников".]
+Краткое описание проекта: "Система управления посещаемостью для отслеживания студентов/сотрудников".
 
 ## Функционал
 * **Авторизация:** JWT-аутентификация.
